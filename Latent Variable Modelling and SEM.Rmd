@@ -1,0 +1,210 @@
+---
+title: "Latent Variable Modelling and Structural Equation Modelling with lavaan"
+author: "Kushan De Silva"
+date: "June 21, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load lavaan
+library(lavaan)
+# input covariances
+example.cor <- lower2full(c(1, 0.85, 1, 0.84, 0.61, 1, 0.68, 0.59, 0.41, 1))
+# name the rows and columns
+rownames(example.cor) <- colnames(example.cor) <- c("Var1", "Var2", "Var3", "Var4")
+example.cor
+
+library(BaylorEdPsych)
+data(MLBPitching2011)
+# summary statistics
+summary(MLBPitching2011$ERAP)
+
+library(psych)
+describe(MLBPitching2011$ERAP)
+
+# frequency of each value of ERAP variable
+table(MLBPitching2011$ERAP)
+
+# make cut points for frequency table groupings--here I used 50
+boundaries <- seq(0, 550, 50)
+# frequency table
+table(cut(MLBPitching2011$ERAP, boundaries))
+
+# relative frequency table
+table(cut(MLBPitching2011$ERAP, boundaries))/length(MLBPitching2011$ERAP)
+
+# Pearson correlations for losses (L) and Age
+cor(MLBPitching2011$Age, MLBPitching2011$L)
+
+# Spearman correlation
+cor(MLBPitching2011$Age, MLBPitching2011$L, method = "spearman")
+
+# covariance for losses (L) and Age
+cov(MLBPitching2011$Age, MLBPitching2011$L)
+
+# simulate data from Normal distribution with a mean of 100, and SD of 15
+X.n <- rnorm(1000, mean = 100, sd = 15)
+# simulate data from a Poisson distribution with a mean and variance of 2
+X.p <- rpois(1000, lambda = 2)
+# calculate mean and variance of Normal data
+mean(X.n)
+var(X.n)
+# calculate mean and variance of Poisson data
+mean(X.p)
+var(X.p)
+
+# Z scores using the scale() function
+# normal variable
+Z.X.n <- scale(X.n)
+# Poisson variable
+Z.X.p <- scale(X.p)
+# calculated mean and variance of normal Z-scores
+mean(Z.X.n)
+var(Z.X.n)
+
+# calculated mean and variance of Poisson Z-scores
+mean(Z.X.p)
+var(Z.X.p)
+
+library(TeachingDemos)
+z.test(na.omit(MLBPitching2011$WLP), mu = 0.5, stdev = sqrt(0.08))
+t.test(MLBPitching2011$WLP, mu = 0.5, alternative = "two.sided", conf.level = 0.95)
+
+# Compare the mean WLP of the National league (Lg==NL) to the American league (Lg==AL)
+# assuming the variances are equal
+t.test(WLP ~ Lg, data = MLBPitching2011, na.rm = TRUE, var.equal = TRUE)
+
+t.test(MLBPitching2011$W, MLBPitching2011$L, paired = TRUE)
+
+example.model<-'
+C ~ y*B + w*A
+D ~ z*C + x*A
+# optional label of residual variance
+C~~C_Resid*C
+# optional label of residual variance
+D~~D_Resid*D
+'
+
+# create a correlation matrix
+library(lavaan)
+regression.cor <- lower2full(c(1.0,0.20,1,0.24,0.30,1,0.70,0.80,0.30,1))
+# name the variables in the matrix
+colnames(regression.cor) <- rownames(regression.cor) <- c("X1", "X2", "X3", "Y")
+regression.cor
+
+regression.model<-'
+# structural model for Y
+Y ~ a*X1 + b*X2 + c*X3
+# label the residual variance of Y
+Y ~~ z*Y
+'
+
+library(lavaan)
+regression.fit <- sem(regression.model, sample.cov = regression.cor, sample.nobs = 1000)
+summary(regression.fit, rsquare = TRUE)
+
+beaujean.model <- '
+salary ~ a*school + c*iq
+school ~ b*iq
+ind := b*c
+5 '
+
+# input the covarianes and name the rows/columns
+beaujean.cov <- lower2full(c(648.07, 30.05, 8.64, 140.18, 25.57, 233.21))
+colnames(beaujean.cov) <- rownames(beaujean.cov) <- c("salary", "school", "iq")
+# specify the path model
+beaujean.model <- '
+salary ~ a*school + c*iq
+school ~ b*iq
+ind:= b*c
+'
+# estimate parameters
+beaujean.fit <- sem(beaujean.model, sample.cov=beaujean.cov, sample.nobs=300)
+summary(beaujean.fit)
+
+library(lavaan)
+# convert vector of correlations into matrix
+wisc4.cor <- lower2full(c(1,0.72,1,0.64,0.63,1,0.51,0.48,0.37,1,0.37,0.38,0.38,0.38,1))
+# name the variables in the matrix
+colnames(wisc4.cor) <- rownames(wisc4.cor) <- c("Information", "Similarities",
+"Word.Reasoning", "Matrix.Reasoning", "Picture.Concepts")
+
+# enter the SDs
+wisc4.sd <- c(3.01 , 3.03 , 2.99 , 2.89 , 2.98)
+names(wisc4.sd) <- c("Information", "Similarities", "Word.Reasoning", "Matrix.Reasoning",
+"Picture.Concepts")
+
+# convert correlations and SDs to covarainces
+wisc4.cov <- cor2cov(wisc4.cor, wisc4.sd)
+
+wisc4.model<-'
+g =~ a*Information + b*Similarities + c*Word.Reasoning + d*Matrix.Reasoning +
+e*Picture.Concepts
+'
+
+wisc4.fit <- cfa(model=wisc4.model, sample.cov=wisc4.cov, sample.nobs=550,
+std.lv=FALSE)
+
+summary(wisc4.fit, standardized = TRUE)
+parameterEstimates(wisc4.fit, standardized = TRUE, ci = FALSE)
+
+# model-implied covariances
+fitted(wisc4.fit)
+# transform model-implied covariances to correlations
+wisc4Fit.cov <- fitted(wisc4.fit)$cov
+wisc4Fit.cor <- cov2cor(wisc4Fit.cov)
+# original correlations
+wisc4.cor
+# residual correlations
+residuals(wisc4.fit, type = "cor")
+
+fitMeasures(wisc4.fit)
+
+modificationIndices(wisc4.fit)
+
+# marker variable
+wisc4.model.Std<-'
+g =~ NA*Information + a*Information + b*Similarities + c*Word.Reasoning +
+d*Matrix.Reasoning + e*Picture.Concepts
+# constrain the LV variance to 1
+g~~1*g
+'
+wisc4.fit.Std <- cfa(wisc4.model.Std, sample.cov=wisc4.cor, sample.nobs=550)
+# equivalent model
+wisc4.fit.Std <- cfa(wisc4.model, sample.cov=wisc4.cor, sample.nobs=550, std.lv=TRUE)
+
+# effects-coding
+wisc4.model.effects<-'
+g =~ NA*Information + a*Information + b*Similarities + c*Word.Reasoning +
+d*Matrix.Reasoning + e*Picture.Concepts
+# constrain the loadings to sum to one
+a + b + c + d + e == 5
+'
+wisc4.fit.effects <- cfa(wisc4.model.effects, sample.cov=wisc4.cor, sample.nobs=550)
+
+# two-factor model of the WISC-IV data
+wisc4.model2<-'
+V =~ a*Information + b*Similarities + c*Word.Reasoning
+F =~ d*Matrix.Reasoning + e*Picture.Concepts
+V~~f*F
+'
+wisc4.fit2 <- cfa(wisc4.model2, sample.cov=wisc4.cov, sample.nobs=550)
+
+# structural equation model
+wisc4SEM.model <- '
+# define latent variables
+V =~ a*Information + b*Similarities + c*Word.Reasoning
+F =~ d*Matrix.Reasoning + e*Picture.Concepts
+# define structural relations
+V~k*F
+'
+wisc4SEM.fit <- cfa(wisc4SEM.model, sample.cov=wisc4.cov, sample.nobs=550)
+summary(wisc4SEM.fit, standardized = TRUE)
+
+
+```
+
